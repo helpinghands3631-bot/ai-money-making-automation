@@ -1,0 +1,100 @@
+{
+  "name": "KeyForAgents Lead Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-capture",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-1",
+      "name": "Lead Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.email}}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "filter-1",
+      "name": "Validate Email",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "resource": "page",
+        "operation": "create",
+        "databaseId": "={{$env.NOTION_LEADS_DB}}",
+        "title": "={{$json.name}}",
+        "propertiesUi": {
+          "propertyValues": [
+            {"key": "Email", "type": "email", "emailValue": "={{$json.email}}"},
+            {"key": "Status", "type": "select", "selectValue": "New"},
+            {"key": "Source", "type": "select", "selectValue": "={{$json.source || 'website'}}"},
+            {"key": "Budget", "type": "number", "numberValue": "={{$json.budget || 0}}"}
+          ]
+        }
+      },
+      "id": "notion-1",
+      "name": "Add to Notion",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2,
+      "position": [650, 200]
+    },
+    {
+      "parameters": {
+        "chatId": "={{$env.TELEGRAM_CHAT_ID}}",
+        "text": "New Lead: {{$json.name}} ({{$json.email}}) from {{$json.source}}",
+        "additionalFields": {"parse_mode": "HTML"}
+      },
+      "id": "telegram-1",
+      "name": "Notify Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [650, 400]
+    },
+    {
+      "parameters": {
+        "url": "https://keyforagents.com/api/onboard",
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            {"name": "email", "value": "={{$json.email}}"},
+            {"name": "name", "value": "={{$json.name}}"},
+            {"name": "source", "value": "={{$json.source}}"}
+          ]
+        },
+        "options": {"timeout": 10000}
+      },
+      "id": "http-1",
+      "name": "Trigger Onboarding",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [850, 300]
+    }
+  ],
+  "connections": {
+    "Lead Webhook": {"main": [[{"node": "Validate Email", "type": "main", "index": 0}]]},
+    "Validate Email": {
+      "main": [
+        [{"node": "Add to Notion", "type": "main", "index": 0}, {"node": "Notify Telegram", "type": "main", "index": 0}],
+        []
+      ]
+    },
+    "Add to Notion": {"main": [[{"node": "Trigger Onboarding", "type": "main", "index": 0}]]}
+  },
+  "active": true,
+  "settings": {"executionOrder": "v1"},
+  "tags": ["leads", "automation", "keyforagents"]
+}
